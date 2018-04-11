@@ -16,6 +16,9 @@ import (
 	"github.com/flopp/go-coordsparser"
 	"github.com/fogleman/gg"
 	"github.com/golang/geo/s2"
+	"os"
+	"image"
+	"image/png"
 )
 
 // Marker represents a marker on the map
@@ -26,6 +29,7 @@ type Marker struct {
 	Size       float64
 	Label      string
 	LabelColor color.Color
+	Image      image.Image
 }
 
 // NewMarker creates a new Marker
@@ -62,6 +66,7 @@ func parseSizeString(s string) (float64, error) {
 }
 
 // ParseMarkerString parses a string and returns an array of markers
+
 func ParseMarkerString(s string) ([]*Marker, error) {
 	markers := make([]*Marker, 0, 0)
 
@@ -69,6 +74,7 @@ func ParseMarkerString(s string) ([]*Marker, error) {
 	size := 16.0
 	label := ""
 	var labelColor color.Color
+	var mImage image.Image
 
 	for _, ss := range strings.Split(s, "|") {
 		if ok, suffix := hasPrefix(ss, "color:"); ok {
@@ -77,6 +83,24 @@ func ParseMarkerString(s string) ([]*Marker, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else if ok, suffix := hasPrefix(ss, "image:"); ok {
+			if _, err := os.Stat(suffix); os.IsNotExist(err) {
+				return nil, err
+			}
+
+			existingImageFile, err := os.Open(suffix)
+			if err != nil {
+				return nil, err
+			}
+
+			defer existingImageFile.Close()
+
+			tImage, err := png.Decode(existingImageFile)
+			if err != nil {
+				return nil, err
+			}
+
+			mImage = tImage
 		} else if ok, suffix := hasPrefix(ss, "label:"); ok {
 			label = suffix
 		} else if ok, suffix := hasPrefix(ss, "size:"); ok {
@@ -97,6 +121,7 @@ func ParseMarkerString(s string) ([]*Marker, error) {
 				return nil, err
 			}
 			m := NewMarker(s2.LatLngFromDegrees(lat, lng), markerColor, size)
+			m.Image = mImage
 			m.Label = label
 			if labelColor != nil {
 				m.SetLabelColor(labelColor)
@@ -131,6 +156,8 @@ func (m *Marker) draw(gc *gg.Context, trans *transformer) {
 	gc.ClearPath()
 	gc.SetLineJoin(gg.LineJoinRound)
 	gc.SetLineWidth(1.0)
+
+	//gc.DrawImage(m.File)
 
 	radius := 0.5 * m.Size
 	x, y := trans.ll2p(m.Position)
