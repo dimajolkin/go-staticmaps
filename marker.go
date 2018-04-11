@@ -9,10 +9,9 @@ import (
 	"fmt"
 	"image/color"
 	"log"
-	"math"
 	"strconv"
 	"strings"
-
+	"math"
 	"github.com/flopp/go-coordsparser"
 	"github.com/fogleman/gg"
 	"github.com/golang/geo/s2"
@@ -30,6 +29,7 @@ type Marker struct {
 	Label      string
 	LabelColor color.Color
 	Image      image.Image
+	Offset     gg.Point
 }
 
 // NewMarker creates a new Marker
@@ -75,6 +75,7 @@ func ParseMarkerString(s string) ([]*Marker, error) {
 	label := ""
 	var labelColor color.Color
 	var mImage image.Image
+	var mOffest gg.Point
 
 	for _, ss := range strings.Split(s, "|") {
 		if ok, suffix := hasPrefix(ss, "color:"); ok {
@@ -101,6 +102,19 @@ func ParseMarkerString(s string) ([]*Marker, error) {
 			}
 
 			mImage = tImage
+		} else if ok, suffix := hasPrefix(ss, "offset:"); ok {
+			s := strings.Split(suffix, ",")
+			x, err := strconv.ParseFloat(s[0], 64)
+			if (err != nil) {
+				return nil, err
+			}
+
+			y, err := strconv.ParseFloat(s[1], 64)
+			if (err != nil) {
+				return nil, err
+			}
+
+			mOffest = gg.Point{x, y}
 		} else if ok, suffix := hasPrefix(ss, "label:"); ok {
 			label = suffix
 		} else if ok, suffix := hasPrefix(ss, "size:"); ok {
@@ -122,6 +136,7 @@ func ParseMarkerString(s string) ([]*Marker, error) {
 			}
 			m := NewMarker(s2.LatLngFromDegrees(lat, lng), markerColor, size)
 			m.Image = mImage
+			m.Offset = mOffest
 			m.Label = label
 			if labelColor != nil {
 				m.SetLabelColor(labelColor)
@@ -157,11 +172,15 @@ func (m *Marker) draw(gc *gg.Context, trans *transformer) {
 	gc.SetLineJoin(gg.LineJoinRound)
 	gc.SetLineWidth(1.0)
 
-	//gc.DrawImage(m.File)
-
-	radius := 0.5 * m.Size
 	x, y := trans.ll2p(m.Position)
-	gc.DrawArc(x, y-m.Size, radius, (90.0+60.0)*math.Pi/180.0, (360.0+90.0-60.0)*math.Pi/180.0)
+
+	if (m.Image != nil) {
+		gc.DrawImage(m.Image, int(x + m.Offset.X), int(y + m.Offset.Y))
+	} else {
+		radius := 0.5 * m.Size
+		gc.DrawArc(x, y-m.Size, radius, (90.0+60.0)*math.Pi/180.0, (360.0+90.0-60.0)*math.Pi/180.0)
+	}
+
 	gc.LineTo(x, y)
 	gc.ClosePath()
 	gc.SetColor(m.Color)
